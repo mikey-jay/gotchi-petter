@@ -1,5 +1,4 @@
 require('dotenv').config();
-const Web3 = require('web3')
 
 // Can be 'safeLow', 'standard', or 'fast' - see: https://gasstation-mainnet.matic.network/v2
 const GAS_SPEED = 'standard'
@@ -18,6 +17,10 @@ const GOTCHI_IDS = process.env.GOTCHI_IDS.split(",")
 
 const MIN_SECONDS_BETWEEN_PETS = 60 * 60 * 12
 
+const getLogTimestamp = () => (new Date()).toISOString().substring(0,19)
+const log = (message) => console.log(`${getLogTimestamp()}: ${message}`)
+
+const Web3 = require('web3')
 const web3 = new Web3(POLYGON_RPC_HOST)
 const contract = new web3.eth.Contract(ABI, AAVEGOTCHI_GAME_FACET_ADDRESS)
 
@@ -48,32 +51,34 @@ const setTransactionGasToMarket = async (tx) => Object.assign({
 const signPetTransaction = (unsignedTransaction) => web3.eth.accounts.signTransaction(unsignedTransaction, PETTER_WALLET_KEY)
 const sendPetTransaction = (signedTransaction) => web3.eth.sendSignedTransaction(signedTransaction.rawTransaction)
 
-const notifySending = (payload) => console.log('Sending transaction...')
-const notifySent = (payload) => console.log('Transaction sent.')
-const notifyHash = (hash) => console.log('Transaction hash is ' + hash)
-const notifyReceipt = (receipt) => console.log("Obtained receipt:\n\n" + JSON.stringify(receipt, null, 2) + "\n")
-const notifyComplete = (receipt) => console.log('Transaction complete.')
+const notifySending = (payload) => log('Sending pet transaction...')
+const notifySent = (payload) => log('Transaction sent.')
+const notifyHash = (hash) => log('Transaction hash is ' + hash)
+const notifyReceipt = (receipt) => log(`Obtained receipt for transaction (blockNumber=${receipt.blockNumber}, gasUsed=${receipt.gasUsed}, effectiveGasPrice=${receipt.effectiveGasPrice})`)
+const notifyComplete = (receipt) => log('Transaction complete.')
 const notifyError = (error) => Promise.reject(error)
 
 const getGotchi = async (gotchiId) => await contract.methods.getAavegotchi(gotchiId).call()
 const getSecondsSinceLastPet = (gotchi) => Math.floor(Date.now() / 1000) - gotchi.lastInteracted
 const isGotchiReadyToBePet = async (gotchiId) => getSecondsSinceLastPet(await getGotchi(gotchiId)) > MIN_SECONDS_BETWEEN_PETS
 
+
 async function main() {
   var idsOfGotchisToPet = []
   for (id of GOTCHI_IDS) {
-    await isGotchiReadyToBePet(id) ? idsOfGotchisToPet.push(id) : console.log("GOTCHI #" + id + " is not ready to be pet yet")
+    await isGotchiReadyToBePet(id) ? idsOfGotchisToPet.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
   }
   if (idsOfGotchisToPet.length == 0) {
-    console.log("There are no gotchis to be pet at this time.")
+    log("There are no gotchis to be pet at this time.")
     return;
   }
+  log(`Petting gotchis with ids: ${idsOfGotchisToPet}`)
   const petTransaction = await setTransactionGasToMarket(await createPetTransaction(idsOfGotchisToPet))
-  console.log("Pet transaction created: \n\n" + JSON.stringify(petTransaction, null, 2) + "\n")
+  log(`Creating pet transaction: (from=${petTransaction.from}, to=${petTransaction.to}, gasLimit=${petTransaction.gasLimit}, maxPriorityFeePerGas=${petTransaction.maxPriorityFeePerGas})`)
   const estimatedGasCostMatic = convertWeiToMatic(petTransaction.gasLimit * (petTransaction.maxPriorityFeePerGas + convertGweiToWei((await getCurrentGasPrices()).estimatedBaseFee)))
-  console.log("Estimated gas cost is ~" + estimatedGasCostMatic.toFixed(6) + " MATIC")
+  log("Estimated gas cost is ~" + estimatedGasCostMatic.toFixed(6) + " MATIC")
   if (estimatedGasCostMatic > GAS_COST_LIMIT_MATIC) {
-    console.log('ABORTED: Estimated gas cost exceeds limit. GAS_COST_LIMIT_MATIC=' + GAS_COST_LIMIT_MATIC)
+    log('ABORTED: Estimated gas cost exceeds limit. GAS_COST_LIMIT_MATIC=' + GAS_COST_LIMIT_MATIC)
   } else {
     sendPetTransaction(await signPetTransaction(petTransaction))
       .once('sending', notifySending)
@@ -83,7 +88,6 @@ async function main() {
       .on('error', notifyError)
       .then(notifyComplete)
   }
-
 }
 
 main()

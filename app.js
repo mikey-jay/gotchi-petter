@@ -15,7 +15,8 @@ const PETTER_WALLET_ADDRESS = process.env.PETTER_WALLET_ADDRESS
 const PETTER_WALLET_KEY = process.env.PETTER_WALLET_KEY
 const GOTCHI_IDS = process.env.GOTCHI_IDS.split(",")
 
-const MIN_SECONDS_BETWEEN_PETS = 60 * 60 * 12
+const SECONDS_BETWEEN_PETS = 60 * 60 * 12 // don't pet a gotchi if has been pet in the last 12 hours
+const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 15 // check gotchi status every 15 minutes
 
 const getLogTimestamp = () => (new Date()).toISOString().substring(0,19)
 const log = (message) => console.log(`${getLogTimestamp()}: ${message}`)
@@ -60,10 +61,10 @@ const notifyError = (error) => Promise.reject(error)
 
 const getGotchi = async (gotchiId) => await contract.methods.getAavegotchi(gotchiId).call()
 const getSecondsSinceLastPet = (gotchi) => Math.floor(Date.now() / 1000) - gotchi.lastInteracted
-const isGotchiReadyToBePet = async (gotchiId) => getSecondsSinceLastPet(await getGotchi(gotchiId)) > MIN_SECONDS_BETWEEN_PETS
+const isGotchiReadyToBePet = async (gotchiId) => getSecondsSinceLastPet(await getGotchi(gotchiId)) > SECONDS_BETWEEN_PETS
 
 
-async function main() {
+async function petAavegotchis() {
   var idsOfGotchisToPet = []
   for (id of GOTCHI_IDS) {
     await isGotchiReadyToBePet(id) ? idsOfGotchisToPet.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
@@ -90,4 +91,5 @@ async function main() {
   }
 }
 
-main()
+petAavegotchis()
+setInterval(petAavegotchis, MILLISECONDS_BETWEEN_RETRIES)

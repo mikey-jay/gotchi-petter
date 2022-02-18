@@ -35,7 +35,6 @@ const getCurrentGasPrices = () => new Promise((resolve, reject) => {
 })
 
 const createPetTransaction = async (idsOfGotchisToPet) => ({
-  nonce: await web3.eth.getTransactionCount(PETTER_WALLET_ADDRESS),
   from: PETTER_WALLET_ADDRESS,
   to: AAVEGOTCHI_GAME_FACET_ADDRESS,
   data: contract.methods.interact(idsOfGotchisToPet).encodeABI()

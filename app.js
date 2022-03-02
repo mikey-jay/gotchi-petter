@@ -61,13 +61,19 @@ const notifyError = (error) => Promise.reject(error)
 
 const getGotchi = async (gotchiId) => await contract.methods.getAavegotchi(gotchiId).call()
 const getSecondsSinceLastPet = (gotchi) => Math.floor(Date.now() / 1000) - gotchi.lastInteracted
-const isGotchiReadyToBePet = async (gotchiId) => getSecondsSinceLastPet(await getGotchi(gotchiId)) > SECONDS_BETWEEN_PETS
+const isGotchiReadyToBePet = (gotchi) => getSecondsSinceLastPet(gotchi) > SECONDS_BETWEEN_PETS
 
 
 async function petAavegotchis() {
   var idsOfGotchisToPet = []
   for (id of GOTCHI_IDS) {
-    await isGotchiReadyToBePet(id) ? idsOfGotchisToPet.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
+    gotchi = await getGotchi(id)
+    if (gotchi.tokenId != id) {
+      log("Error while fetching gotchi with id " + id + " from getAavegotchi contract method - id field did not match as expected.")
+    } else {
+      log(`Found gotchi: (id=${gotchi.tokenId}, lastInteracted=${new Date(gotchi.lastInteracted * 1000)})`)
+      isGotchiReadyToBePet(gotchi) ? idsOfGotchisToPet.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
+    }
   }
   if (idsOfGotchisToPet.length == 0) {
     log("There are no gotchis to be pet at this time.")

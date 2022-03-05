@@ -34,7 +34,15 @@ const getCurrentGasPrices = () => new Promise((resolve, reject) => {
     const { statusCode } = res
     let rawData = ''
     res.on('data', (chunk) => rawData += chunk)
-    res.on('end', () => resolve(JSON.parse(rawData)))
+    res.on('end', () => {
+      const gasData = JSON.parse(rawData)
+      if (gasData['error'])
+        reject(new Error(`Polygon gas station error: ${gasData.error.message}`))
+      else if (typeof gasData[GAS_SPEED] == 'undefined')
+        reject(new Error(`Polygon gas station response does not include any data for gas speed '${GAS_SPEED}' (rawData=${rawData})`))
+      else
+        resolve(gasData)
+    })
   })
 })
 
@@ -59,43 +67,54 @@ const notifyReceipt = (receipt) => log(`Obtained receipt for transaction (blockN
 const notifyComplete = (receipt) => log('Transaction complete.')
 const notifyError = (error) => Promise.reject(error)
 
-const getGotchi = async (gotchiId) => await contract.methods.getAavegotchi(gotchiId).call()
+const getGotchi = (gotchiId) => contract.methods.getAavegotchi(gotchiId).call()
 const getSecondsSinceLastPet = (gotchi) => Math.floor(Date.now() / 1000) - gotchi.lastInteracted
-const isGotchiReadyToBePet = (gotchi) => getSecondsSinceLastPet(gotchi) > SECONDS_BETWEEN_PETS
+const isReadyToBePet = (gotchi) => getSecondsSinceLastPet(gotchi) > SECONDS_BETWEEN_PETS
 
-
-async function petAavegotchis() {
-  var idsOfGotchisToPet = []
-  for (id of GOTCHI_IDS) {
-    gotchi = await getGotchi(id)
-    if (gotchi.tokenId != id) {
-      log("Error while fetching gotchi with id " + id + " from getAavegotchi contract method - id field did not match as expected.")
-    } else {
-      log(`Found gotchi: (id=${gotchi.tokenId}, lastInteracted=${new Date(gotchi.lastInteracted * 1000)})`)
-      isGotchiReadyToBePet(gotchi) ? idsOfGotchisToPet.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
+const filterPettableGotchiIds = async (unfilteredIds) => {
+  var pettableIds = []
+  for (id of unfilteredIds) {
+    var gotchi = undefined
+    log(`Checking status of gotchi (id=${id})`)
+    try {
+      gotchi = await getGotchi(id)
+    } catch (err) {
+      log(`Error while fetching gotchi (id=${id}): ${err}`)
+      break
     }
+    log(`Found gotchi: (id=${gotchi.tokenId}, lastInteracted=${new Date(gotchi.lastInteracted * 1000)})`)
+    isReadyToBePet(gotchi) ? pettableIds.push(id) : log("Gotchi with id " + id + " is not ready to be pet yet")
   }
-  if (idsOfGotchisToPet.length == 0) {
+  return pettableIds;
+}
+
+async function petAavegotchis(ids) {
+  if (ids.length == 0) {
     log("There are no gotchis to be pet at this time.")
-    return;
+    return
   }
-  log(`Petting gotchis with ids: ${idsOfGotchisToPet}`)
-  const petTransaction = await setTransactionGasToMarket(await createPetTransaction(idsOfGotchisToPet))
+  log(`Petting gotchis with ids: ${ids}`)
+  try {
+    var petTransaction = await setTransactionGasToMarket(await createPetTransaction(ids))
+  } catch (err) {
+    return Promise.reject(`Error creating transaction: ${err.message}`)
+  }
   log(`Creating pet transaction: (from=${petTransaction.from}, to=${petTransaction.to}, gasLimit=${petTransaction.gasLimit}, maxPriorityFeePerGas=${petTransaction.maxPriorityFeePerGas})`)
   const estimatedGasCostMatic = convertWeiToMatic(petTransaction.gasLimit * (petTransaction.maxPriorityFeePerGas + convertGweiToWei((await getCurrentGasPrices()).estimatedBaseFee)))
   log("Estimated gas cost is ~" + estimatedGasCostMatic.toFixed(6) + " MATIC")
   if (estimatedGasCostMatic > GAS_COST_LIMIT_MATIC) {
     log('ABORTED: Estimated gas cost exceeds limit. GAS_COST_LIMIT_MATIC=' + GAS_COST_LIMIT_MATIC)
   } else {
-    sendPetTransaction(await signPetTransaction(petTransaction))
+    return sendPetTransaction(await signPetTransaction(petTransaction))
       .once('sending', notifySending)
       .once('sent', notifySent)
       .once('transactionHash', notifyHash)
       .once('receipt', notifyReceipt)
       .on('error', notifyError)
-      .then(notifyComplete)
+      .then(notifyComplete).catch(notifyError)
   }
 }
 
-petAavegotchis()
-setInterval(petAavegotchis, MILLISECONDS_BETWEEN_RETRIES)
+const loop = () => filterPettableGotchiIds(GOTCHI_IDS).then(petAavegotchis).catch(log)
+
+loop().then(() => setInterval(loop, MILLISECONDS_BETWEEN_RETRIES))

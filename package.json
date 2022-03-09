@@ -1,0 +1,19 @@
+{
+  "name": "gotchi-petter",
+  "version": "1.0.0",
+  "description": "App for automatically petting aavegotchis",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "aavegotchi"
+  ],
+  "author": "Mikey Jay",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "https": "^1.0.0",
+    "web3": "^1.7.0"
+  }
+}

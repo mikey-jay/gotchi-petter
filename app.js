@@ -9,21 +9,29 @@ const GAS_COST_LIMIT_MATIC = 0.05
 const ABI = require('./abi.js')
 const POLYGON_RPC_HOST = "https://polygon-rpc.com/"
 const POLYGON_GAS_STATION_HOST = "https://gasstation-mainnet.matic.network/v2"
-const AAVEGOTCHI_GAME_FACET_ADDRESS = "0x86935F11C86623deC8a25696E1C19a8659CbF95d"
+const AAVEGOTCHI_DIAMOND_ADDRESS = "0x86935F11C86623deC8a25696E1C19a8659CbF95d"
 
 const PETTER_WALLET_ADDRESS = process.env.PETTER_WALLET_ADDRESS
 const PETTER_WALLET_KEY = process.env.PETTER_WALLET_KEY
 const GOTCHI_IDS = process.env.GOTCHI_IDS.split(",")
 
 const SECONDS_BETWEEN_PETS = 60 * 60 * 12 // don't pet a gotchi if has been pet in the last 12 hours
-const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 15 // check gotchi status every 15 minutes
+
+/*
+How often to check the status of gotchis on the blockchain to see if it's time to pet
+I do not recommend reducing this time, as it could lead to unnecessary petting and wasted gas
+if the prior pet transaction takes more than this amount of time to be confirmed.
+
+Setting this duration too long is also undesirable as it leaves gotchis unpet for some time.
+*/
+const MILLISECONDS_BETWEEN_RETRIES = 1000 * 60 * 15 // 15 minutes
 
 const getLogTimestamp = () => (new Date()).toISOString().substring(0,19)
 const log = (message) => console.log(`${getLogTimestamp()}: ${message}`)
 
 const Web3 = require('web3')
 const web3 = new Web3(POLYGON_RPC_HOST)
-const contract = new web3.eth.Contract(ABI, AAVEGOTCHI_GAME_FACET_ADDRESS)
+const contract = new web3.eth.Contract(ABI, AAVEGOTCHI_DIAMOND_ADDRESS)
 
 const convertGweiToWei = (gwei) => gwei * (10 ** 9)
 const convertWeiToMatic = (wei) => wei / (10 ** 18)
@@ -48,7 +56,7 @@ const getCurrentGasPrices = () => new Promise((resolve, reject) => {
 
 const createPetTransaction = async (idsOfGotchisToPet) => ({
   from: PETTER_WALLET_ADDRESS,
-  to: AAVEGOTCHI_GAME_FACET_ADDRESS,
+  to: AAVEGOTCHI_DIAMOND_ADDRESS,
   data: contract.methods.interact(idsOfGotchisToPet).encodeABI()
 })
 

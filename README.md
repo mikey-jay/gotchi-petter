@@ -26,6 +26,7 @@ npm install
 PETTER_WALLET_ADDRESS=(petting wallet address ie: 0x...)
 PETTER_WALLET_KEY=(petting wallet private key ie: 0x...)
 GOTCHI_IDS=(ids of gotchis to pet ie: id1,id2,id3)
+POLYGON_RPC_HOST=(optional, if you want to use a different polygon RPC - defaults to https://polygon-rpc.com if ommitted)
 ```
 Include the public address and private key of your dedicated petting wallet. `GOTCHI_IDS` should be a comma separated list of ids. The id corresponds to the gotchis tokenId, which can also be found at the end of the url when viewing your gotchi. (ie: app.aavegotchi.com/gotchi/##### <-- the ID)
 
